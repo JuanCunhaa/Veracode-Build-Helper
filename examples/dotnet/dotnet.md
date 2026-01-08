@@ -67,7 +67,7 @@ Se precisar de algo que nao existe como input, use os `*_args` para passar flags
 - `dotnet_test_args`
 - `dotnet_publish_args`
 
-Os `*_args` agora suportam aspas corretamente (ex.: `--property:"Name=Value with spaces"`).
+Os `*_args` suportam aspas e espaços. Para evitar problemas com paths (ex.: `C:\Program Files\...`) prefira usar **multiline** (1 argumento por linha).
 
 ### MSBuild (first-class)
 
@@ -83,6 +83,7 @@ Quando `dotnet_publish_multi: 'true'`:
 
 - Se `dotnet_projects` estiver preenchido (multiline), publica cada `.csproj` em `dotnet_publish_dir/<ProjectName>/`.
 - Se `dotnet_projects` estiver vazio e `dotnet_project` for `.sln`, usa `dotnet sln <sln> list` para descobrir os projetos e publica todos.
+- Você pode filtrar com `dotnet_projects_include` e `dotnet_projects_exclude` (multiline, wildcards).
 
 ### NuGet (opcional / private feeds)
 
@@ -94,6 +95,7 @@ Se voce precisa de feed privado, pode:
 Inputs:
 
 - `enable_nuget`: `'true'/'false'` ou vazio (vazio = auto quando algum `nuget_*` for informado)
+- `nuget_auth_mode`: `dotnet` \| `setup-dotnet` \| `config`
 - `nuget_config_path`: path do `nuget.config` (relativo ao `working_directory`)
 - `nuget_config_content`: conteudo inline do `nuget.config` (gera arquivo temporario)
 - `nuget_source_url`: URL do feed
@@ -101,13 +103,23 @@ Inputs:
 - `nuget_username`: default `token`
 - `nuget_password`: token/senha (use `secrets.*`)
 - `nuget_sources`: multiline `name|url|username|password` (username/password opcionais)
+- `nuget_sources_json`: JSON (recomendado; nao quebra com `|` no segredo)
 - `nuget_locked_mode`: `'true'/'false'` (restore)
 - `nuget_ignore_failed_sources`: `'true'/'false'` (restore)
 - `nuget_interactive`: `'true'/'false'` (restore)
 - `nuget_packages_dir`: path (restore)
 - `nuget_no_cache`: `'true'/'false'` (restore)
 
-Nota: para adicionar source com credenciais, o `dotnet` exige `--store-password-in-clear-text` (fica apenas no runner do job).
+Notas:
+
+- `nuget_auth_mode=dotnet`: usa `dotnet nuget add/update source` (para username/password, o `dotnet` exige `--store-password-in-clear-text`, e isso fica apenas no runner do job).
+- `nuget_auth_mode=setup-dotnet`: usa `actions/setup-dotnet` + `NUGET_AUTH_TOKEN` (bom para GitHub Packages e feeds por token).
+- `nuget_auth_mode=config`: exige `nuget_config_path`/`nuget_config_content` e nao adiciona sources via CLI.
+
+## Feeds comuns
+
+- GitHub Packages: `nuget_auth_mode=setup-dotnet`, `nuget_source_url=https://nuget.pkg.github.com/<OWNER>/index.json`, `nuget_password=${{ secrets.GITHUB_TOKEN }}`.
+- Azure Artifacts/Artifactory/Nexus: em geral use `nuget_config_path` ou `nuget_config_content` (modo `config`) e/ou `nuget_sources_json` (modo `dotnet`).
 
 ### Empacotamento
 

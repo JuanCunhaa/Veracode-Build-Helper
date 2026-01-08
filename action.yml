@@ -134,12 +134,24 @@ inputs:
     description: "Lista (multiline) de projetos para publish (paths .csproj). Se vazio e dotnet_project for .sln, usa 'dotnet sln list'."
     required: false
     default: ""
+  dotnet_projects_include:
+    description: "Filtro include (multiline) para projetos no publish_multi (wildcards). Se vazio, inclui todos."
+    required: false
+    default: ""
+  dotnet_projects_exclude:
+    description: "Filtro exclude (multiline) para projetos no publish_multi (wildcards)."
+    required: false
+    default: ""
 
   # dotnet - nuget (opcional)
   enable_nuget:
     description: "Se 'true', configura NuGet antes do restore (private feeds). Se vazio, ativa automaticamente quando algum nuget_* for informado."
     required: false
     default: ""
+  nuget_auth_mode:
+    description: "Modo de autenticação do NuGet: dotnet|setup-dotnet|config. Use setup-dotnet para evitar --store-password-in-clear-text quando possível."
+    required: false
+    default: "dotnet"
   nuget_config_path:
     description: "Path do nuget.config (relativo ao working_directory) para usar no restore."
     required: false
@@ -166,6 +178,10 @@ inputs:
     default: ""
   nuget_sources:
     description: "Lista (multiline) de sources no formato name|url|username|password (username/password opcionais)."
+    required: false
+    default: ""
+  nuget_sources_json:
+    description: "Lista (JSON) de sources (mais seguro que nuget_sources). Ex.: [{\"name\":\"private\",\"url\":\"...\",\"username\":\"token\",\"password\":\"...\"}]"
     required: false
     default: ""
   nuget_locked_mode:
@@ -246,6 +262,7 @@ runs:
         dotnet_version_file: ${{ inputs.dotnet_version_file }}
         project: ${{ inputs.dotnet_project }}
         enable_nuget: ${{ inputs.enable_nuget }}
+        nuget_auth_mode: ${{ inputs.nuget_auth_mode }}
         nuget_config_path: ${{ inputs.nuget_config_path }}
         nuget_config_content: ${{ inputs.nuget_config_content }}
         nuget_source_url: ${{ inputs.nuget_source_url }}
@@ -253,6 +270,7 @@ runs:
         nuget_username: ${{ inputs.nuget_username }}
         nuget_password: ${{ inputs.nuget_password }}
         nuget_sources: ${{ inputs.nuget_sources }}
+        nuget_sources_json: ${{ inputs.nuget_sources_json }}
         nuget_locked_mode: ${{ inputs.nuget_locked_mode }}
         nuget_ignore_failed_sources: ${{ inputs.nuget_ignore_failed_sources }}
         nuget_interactive: ${{ inputs.nuget_interactive }}
@@ -281,6 +299,8 @@ runs:
         publish_dir: ${{ inputs.dotnet_publish_dir }}
         publish_multi: ${{ inputs.dotnet_publish_multi }}
         projects: ${{ inputs.dotnet_projects }}
+        projects_include: ${{ inputs.dotnet_projects_include }}
+        projects_exclude: ${{ inputs.dotnet_projects_exclude }}
 
     - name: Resolve include paths
       id: include

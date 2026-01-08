@@ -21,6 +21,9 @@ inputs:
   enable_nuget:
     required: false
     default: ""
+  nuget_auth_mode:
+    required: false
+    default: "dotnet"
   nuget_config_path:
     required: false
     default: ""
@@ -40,6 +43,9 @@ inputs:
     required: false
     default: ""
   nuget_sources:
+    required: false
+    default: ""
+  nuget_sources_json:
     required: false
     default: ""
   nuget_locked_mode:
@@ -135,6 +141,12 @@ inputs:
   projects:
     required: false
     default: ""
+  projects_include:
+    required: false
+    default: ""
+  projects_exclude:
+    required: false
+    default: ""
 
 outputs:
   language_effective:
@@ -156,6 +168,14 @@ runs:
         dotnet-version: ${{ inputs.dotnet_version }}
         dotnet-version-file: ${{ inputs.dotnet_version_file }}
 
+    - name: Setup NuGet auth (setup-dotnet)
+      if: inputs.nuget_auth_mode == 'setup-dotnet' && inputs.nuget_source_url != '' && inputs.nuget_password != ''
+      uses: actions/setup-dotnet@v4
+      with:
+        source-url: ${{ inputs.nuget_source_url }}
+      env:
+        NUGET_AUTH_TOKEN: ${{ inputs.nuget_password }}
+
     - name: Dotnet build/test/publish
       id: meta
       shell: pwsh
@@ -166,36 +186,32 @@ runs:
         function IsTrue([string]$v) { return ($v ?? '').Trim().ToLowerInvariant() -eq 'true' }
         function IsSet([string]$v) { return -not [string]::IsNullOrWhiteSpace(($v ?? '').Trim()) }
 
-        function Split-Args([string]$s) {
-          if (-not (IsSet $s)) { return @() }
+        function Read-Lines([string]$text) {
+          if (-not (IsSet $text)) { return @() }
+          return @(
+            $text -split "(`r`n|`n|`r)" |
+              ForEach-Object { $_.Trim() } |
+              Where-Object { $_ -ne '' }
+          )
+        }
 
+        function Parse-Args([string]$text) {
+          if (-not (IsSet $text)) { return @() }
+
+          $lines = Read-Lines $text
+          if ($lines.Count -gt 1) {
+            return $lines
+          }
+
+          $s = $lines[0]
           $args = New-Object System.Collections.Generic.List[string]
           $current = New-Object System.Text.StringBuilder
           $inSingle = $false
           $inDouble = $false
-          $escape = $false
 
           foreach ($ch in $s.ToCharArray()) {
-            if ($escape) {
-              [void]$current.Append($ch)
-              $escape = $false
-              continue
-            }
-
-            if ($ch -eq '\' -and -not $inSingle) {
-              $escape = $true
-              continue
-            }
-
-            if ($ch -eq '"' -and -not $inSingle) {
-              $inDouble = -not $inDouble
-              continue
-            }
-
-            if ($ch -eq "'" -and -not $inDouble) {
-              $inSingle = -not $inSingle
-              continue
-            }
+            if ($ch -eq '"' -and -not $inSingle) { $inDouble = -not $inDouble; continue }
+            if ($ch -eq "'" -and -not $inDouble) { $inSingle = -not $inSingle; continue }
 
             if (-not $inSingle -and -not $inDouble -and [char]::IsWhiteSpace($ch)) {
               if ($current.Length -gt 0) {
@@ -208,18 +224,23 @@ runs:
             [void]$current.Append($ch)
           }
 
-          if ($escape) { [void]$current.Append('\') }
           if ($current.Length -gt 0) { $args.Add($current.ToString()) }
           return $args.ToArray()
         }
 
-        function Read-Lines([string]$text) {
-          if (-not (IsSet $text)) { return @() }
-          return @(
-            $text -split "(`r`n|`n|`r)" |
-              ForEach-Object { $_.Trim() } |
-              Where-Object { $_ -ne '' }
-          )
+        function Normalize-PathForMatch([string]$p) {
+          return ($p ?? '').Replace('\','/').Trim()
+        }
+
+        function Match-AnyWildcard([string[]]$patterns, [string]$candidate) {
+          if (-not $patterns -or $patterns.Count -eq 0) { return $false }
+          foreach ($pat in $patterns) {
+            $p = Normalize-PathForMatch $pat
+            if (-not (IsSet $p)) { continue }
+            $wp = New-Object System.Management.Automation.WildcardPattern($p, 'IgnoreCase')
+            if ($wp.IsMatch($candidate)) { return $true }
+          }
+          return $false
         }
 
         function Normalize-MsbuildProperties([string]$text) {
@@ -241,8 +262,8 @@ runs:
           Write-Host "::endgroup::"
         }
 
-        $project = ('${{ inputs.project }}' ?? '').Trim()
-        $target = if ([string]::IsNullOrWhiteSpace($project)) { '.' } else { $project }
+        $targetRaw = ('${{ inputs.project }}' ?? '').Trim()
+        $target = if ([string]::IsNullOrWhiteSpace($targetRaw)) { '.' } else { $targetRaw }
 
         $restore = IsTrue '${{ inputs.restore }}'
         $build = IsTrue '${{ inputs.build }}'
@@ -261,10 +282,10 @@ runs:
         $msbuildTargets = ('${{ inputs.msbuild_targets }}' ?? '').Trim()
         $msbuildProps = Normalize-MsbuildProperties ('${{ inputs.msbuild_properties }}' ?? '')
 
-        $restoreArgs = Split-Args (('${{ inputs.restore_args }}' ?? '').Trim())
-        $buildArgs = Split-Args (('${{ inputs.build_args }}' ?? '').Trim())
-        $testArgs = Split-Args (('${{ inputs.test_args }}' ?? '').Trim())
-        $publishArgs = Split-Args (('${{ inputs.publish_args }}' ?? '').Trim())
+        $restoreArgs = Parse-Args (('${{ inputs.restore_args }}' ?? '').Trim())
+        $buildArgs = Parse-Args (('${{ inputs.build_args }}' ?? '').Trim())
+        $testArgs = Parse-Args (('${{ inputs.test_args }}' ?? '').Trim())
+        $publishArgs = Parse-Args (('${{ inputs.publish_args }}' ?? '').Trim())
 
         $publishDir = ('${{ inputs.publish_dir }}' ?? '').Trim()
         if ([string]::IsNullOrWhiteSpace($publishDir)) { $publishDir = 'publish' }
@@ -275,13 +296,18 @@ runs:
 
         # NuGet
         $enableNugetRaw = ('${{ inputs.enable_nuget }}' ?? '').Trim()
+        $nugetAuthMode = (('${{ inputs.nuget_auth_mode }}' ?? 'dotnet').Trim()).ToLowerInvariant()
+
         $nugetConfigPath = ('${{ inputs.nuget_config_path }}' ?? '').Trim()
         $nugetConfigContent = ('${{ inputs.nuget_config_content }}' ?? '')
+
         $nugetSourceUrl = ('${{ inputs.nuget_source_url }}' ?? '').Trim()
         $nugetSourceName = ('${{ inputs.nuget_source_name }}' ?? '').Trim()
         $nugetUsername = ('${{ inputs.nuget_username }}' ?? '').Trim()
         $nugetPassword = ('${{ inputs.nuget_password }}' ?? '').Trim()
-        $nugetSourcesRaw = ('${{ inputs.nuget_sources }}' ?? '')
+
+        $nugetSourcesLegacyRaw = ('${{ inputs.nuget_sources }}' ?? '')
+        $nugetSourcesJsonRaw = ('${{ inputs.nuget_sources_json }}' ?? '')
 
         $nugetLockedMode = IsTrue '${{ inputs.nuget_locked_mode }}'
         $nugetIgnoreFailedSources = IsTrue '${{ inputs.nuget_ignore_failed_sources }}'
@@ -292,8 +318,24 @@ runs:
         if (-not (IsSet $nugetSourceName)) { $nugetSourceName = 'private' }
         if (-not (IsSet $nugetUsername)) { $nugetUsername = 'token' }
 
-        $nugetAuto = (IsSet $nugetConfigPath) -or (IsSet $nugetSourceUrl) -or (IsSet $nugetPassword) -or (IsSet $nugetSourcesRaw) -or (IsSet $nugetConfigContent)
+        $nugetAuto = (IsSet $nugetConfigPath) -or (IsSet $nugetSourceUrl) -or (IsSet $nugetPassword) -or (IsSet $nugetSourcesLegacyRaw) -or (IsSet $nugetSourcesJsonRaw) -or (IsSet $nugetConfigContent)
         $enableNuget = if (-not (IsSet $enableNugetRaw)) { $nugetAuto } else { IsTrue $enableNugetRaw }
+
+        if ($enableNuget -and $nugetAuthMode -notin @('dotnet','setup-dotnet','config')) {
+          throw "nuget_auth_mode invalido: '$nugetAuthMode' (use dotnet|setup-dotnet|config)"
+        }
+
+        if ($enableNuget -and $nugetAuthMode -eq 'setup-dotnet') {
+          if (-not (IsSet $nugetSourceUrl) -or -not (IsSet $nugetPassword)) {
+            throw "nuget_auth_mode=setup-dotnet requer nuget_source_url e nuget_password."
+          }
+          if (IsSet $nugetConfigPath -or IsSet $nugetConfigContent) {
+            throw "nuget_auth_mode=setup-dotnet nao deve ser usado junto com nuget_config_path/nuget_config_content (restore com --configfile ignora o config global)."
+          }
+          if (IsSet $nugetSourcesLegacyRaw -or IsSet $nugetSourcesJsonRaw) {
+            throw "nuget_auth_mode=setup-dotnet suporta apenas um source (nuget_source_url). Remova nuget_sources/nuget_sources_json."
+          }
+        }
 
         $nugetConfigEffective = $null
         if (IsSet $nugetConfigContent) {
@@ -305,24 +347,48 @@ runs:
         }
 
         $sources = New-Object System.Collections.Generic.List[hashtable]
-        foreach ($line in (Read-Lines $nugetSourcesRaw)) {
-          $parts = $line.Split('|')
-          if ($parts.Length -lt 2) { throw "Linha invalida em nuget_sources: '$line' (use name|url|username|password)" }
-          $sName = ($parts[0] ?? '').Trim()
-          $sUrl = ($parts[1] ?? '').Trim()
-          $sUser = if ($parts.Length -ge 3) { ($parts[2] ?? '').Trim() } else { '' }
-          $sPass = if ($parts.Length -ge 4) { ($parts[3] ?? '').Trim() } else { '' }
-          if (-not (IsSet $sName)) { throw "nuget_sources: name vazio em '$line'" }
-          if (-not (IsSet $sUrl)) { throw "nuget_sources: url vazia em '$line'" }
-          $sources.Add(@{ name = $sName; url = $sUrl; username = $sUser; password = $sPass })
+
+        if (IsSet $nugetSourcesJsonRaw) {
+          try {
+            $json = $nugetSourcesJsonRaw | ConvertFrom-Json
+          } catch {
+            throw "nuget_sources_json invalido (JSON). Dica: use um array de objetos [{\"name\":\"...\",\"url\":\"...\"}]."
+          }
+          if ($null -eq $json) { $json = @() }
+          if ($json -isnot [System.Collections.IEnumerable]) { $json = @($json) }
+
+          foreach ($item in $json) {
+            $name = ($item.name ?? '').ToString().Trim()
+            $url = ($item.url ?? '').ToString().Trim()
+            $user = ($item.username ?? '').ToString().Trim()
+            $pass = ($item.password ?? '').ToString()
+            if (-not (IsSet $name)) { throw "nuget_sources_json: item com name vazio." }
+            if (-not (IsSet $url)) { throw "nuget_sources_json: item '$name' com url vazia." }
+            $sources.Add(@{ name = $name; url = $url; username = $user; password = $pass })
+          }
+        }
+
+        if (IsSet $nugetSourcesLegacyRaw) {
+          Write-Host "::warning::nuget_sources (name|url|...) esta obsoleto; prefira nuget_sources_json."
+          foreach ($line in (Read-Lines $nugetSourcesLegacyRaw)) {
+            $parts = $line.Split('|')
+            if ($parts.Length -lt 2) { throw "Linha invalida em nuget_sources: '$line' (use name|url|username|password)" }
+            $sName = ($parts[0] ?? '').Trim()
+            $sUrl = ($parts[1] ?? '').Trim()
+            $sUser = if ($parts.Length -ge 3) { ($parts[2] ?? '').Trim() } else { '' }
+            $sPass = if ($parts.Length -ge 4) { ($parts[3] ?? '').Trim() } else { '' }
+            if (-not (IsSet $sName)) { throw "nuget_sources: name vazio em '$line'" }
+            if (-not (IsSet $sUrl)) { throw "nuget_sources: url vazia em '$line'" }
+            $sources.Add(@{ name = $sName; url = $sUrl; username = $sUser; password = $sPass })
+          }
         }
 
         if (IsSet $nugetSourceUrl) {
           $sources.Add(@{ name = $nugetSourceName; url = $nugetSourceUrl; username = $nugetUsername; password = $nugetPassword })
         }
 
-        if ($enableNuget) {
-          Run "nuget setup" {
+        if ($enableNuget -and $nugetAuthMode -eq 'dotnet') {
+          Run "nuget setup (dotnet)" {
             if (IsSet $nugetPassword) { Write-Host "::add-mask::$nugetPassword" }
             foreach ($src in $sources) {
               if (IsSet $src.password) { Write-Host "::add-mask::$($src.password)" }
@@ -355,6 +421,10 @@ runs:
               Write-Host "NuGet source ok: $($src.name)"
             }
           }
+        }
+
+        if ($enableNuget -and $nugetAuthMode -eq 'config' -and -not $nugetConfigEffective) {
+          throw "nuget_auth_mode=config requer nuget_config_path ou nuget_config_content."
         }
 
         if ($restore) {
@@ -407,6 +477,8 @@ runs:
 
         $publishMulti = IsTrue '${{ inputs.publish_multi }}'
         $explicitProjects = Read-Lines ('${{ inputs.projects }}' ?? '')
+        $includePatterns = Read-Lines ('${{ inputs.projects_include }}' ?? '')
+        $excludePatterns = Read-Lines ('${{ inputs.projects_exclude }}' ?? '')
 
         function Publish-One([string]$proj, [string]$outDir) {
           Run "dotnet publish: $proj" {
@@ -427,15 +499,28 @@ runs:
           }
         }
 
+        function Filter-Projects([string[]]$projects) {
+          $out = New-Object System.Collections.Generic.List[string]
+          foreach ($p in $projects) {
+            $cand = Normalize-PathForMatch $p
+            if (-not (IsSet $cand)) { continue }
+
+            if ($includePatterns.Count -gt 0 -and -not (Match-AnyWildcard $includePatterns $cand)) { continue }
+            if ($excludePatterns.Count -gt 0 -and (Match-AnyWildcard $excludePatterns $cand)) { continue }
+            $out.Add($p)
+          }
+          return $out.ToArray()
+        }
+
         if ($publish) {
           if (-not $publishMulti) {
             Publish-One $target $publishDir
           } else {
             $projectsToPublish = New-Object System.Collections.Generic.List[string]
-
             foreach ($p in $explicitProjects) { $projectsToPublish.Add($p) }
 
-            if ($projectsToPublish.Count -eq 0 -and $target.ToLowerInvariant().EndsWith('.sln')) {
+            $isSolution = $target.ToLowerInvariant().EndsWith('.sln')
+            if ($projectsToPublish.Count -eq 0 -and $isSolution) {
               Run "dotnet sln list" {
                 $lines = & dotnet sln $target list
                 if ($LASTEXITCODE -ne 0) { throw "Falha ao listar projetos do solution: $target" }
@@ -448,11 +533,16 @@ runs:
               }
             }
 
-            if ($projectsToPublish.Count -eq 0) {
-              throw "publish_multi=true, mas nenhum projeto foi resolvido. Use dotnet_projects ou informe um .sln em dotnet_project."
+            if ($projectsToPublish.Count -eq 0 -and -not $isSolution) {
+              throw "publish_multi=true requer dotnet_projects (lista de .csproj) ou dotnet_project apontando para um .sln."
             }
 
-            foreach ($p in $projectsToPublish) {
+            $filtered = Filter-Projects ($projectsToPublish.ToArray())
+            if ($filtered.Length -eq 0) {
+              throw "publish_multi=true, mas nenhum projeto sobrou apos filtros. Ajuste dotnet_projects(_include/_exclude) ou dotnet_projects."
+            }
+
+            foreach ($p in $filtered) {
               $name = [System.IO.Path]::GetFileNameWithoutExtension($p)
               if (-not (IsSet $name)) { throw "Nao foi possivel derivar nome do projeto: $p" }
               $out = Join-Path $publishDir $name

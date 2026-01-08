@@ -6,7 +6,11 @@ O formato e baseado no [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0
 
 ## [Unreleased]
 
-- N/A.
+### Added
+
+- NuGet: `nuget_sources_json` (mais seguro que `nuget_sources`) e `nuget_auth_mode` (inclui `setup-dotnet` sem `--store-password-in-clear-text`).
+- Multi-projeto: filtros `dotnet_projects_include`/`dotnet_projects_exclude`.
+- Validações melhores para `publish_multi` e NuGet.
 
 ## [1.0.1] - 2026-01-08
 

@@ -1,4 +1,4 @@
-name: build-and-package (dotnet nuget private feed)
+name: build-and-package (dotnet github packages)
 
 on:
   workflow_dispatch:
@@ -6,6 +6,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     steps:
       - uses: actions/checkout@v4
 
@@ -15,13 +18,12 @@ jobs:
           dotnet_version: 8.0.x
           dotnet_project: MySolution.sln
           enable_nuget: "true"
-          nuget_auth_mode: dotnet
-          nuget_sources_json: |
-            [
-              {"name":"private","url":"https://example.com/nuget/v3/index.json","username":"token","password":"${{ secrets.NUGET_TOKEN }}"}
-            ]
+          nuget_auth_mode: setup-dotnet
+          nuget_source_url: https://nuget.pkg.github.com/<OWNER>/index.json
+          nuget_password: ${{ secrets.GITHUB_TOKEN }}
           dotnet_publish: "true"
           dotnet_publish_multi: "true"
           dotnet_configuration: Release
           dotnet_publish_dir: publish
           output_zip: app.zip
+

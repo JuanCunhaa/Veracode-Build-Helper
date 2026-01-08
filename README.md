@@ -17,3 +17,4 @@ Consulte a documentação e exemplos por linguagem/stack em `examples/`.
 - .NET (publish + package): `examples/dotnet/publish-and-package.yml`
 - .NET (multi-projeto via .sln): `examples/dotnet/publish-multi-sln.yml`
 - .NET (NuGet feed privado): `examples/dotnet/nuget-private-feed.yml`
+- .NET (GitHub Packages): `examples/dotnet/nuget-github-packages.yml`
