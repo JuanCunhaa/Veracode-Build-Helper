@@ -19,11 +19,10 @@ jobs:
           dotnet_project: MySolution.sln
           enable_nuget: "true"
           nuget_auth_mode: setup-dotnet
-          nuget_source_url: https://nuget.pkg.github.com/<OWNER>/index.json
+          nuget_source_url: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
           nuget_password: ${{ secrets.GITHUB_TOKEN }}
           dotnet_publish: "true"
           dotnet_publish_multi: "true"
           dotnet_configuration: Release
           dotnet_publish_dir: publish
           output_zip: app.zip
-

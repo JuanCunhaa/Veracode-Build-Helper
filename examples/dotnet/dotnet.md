@@ -85,6 +85,8 @@ Quando `dotnet_publish_multi: 'true'`:
 - Se `dotnet_projects` estiver vazio e `dotnet_project` for `.sln`, usa `dotnet sln <sln> list` para descobrir os projetos e publica todos.
 - Você pode filtrar com `dotnet_projects_include` e `dotnet_projects_exclude` (multiline, wildcards).
 
+No exemplo `examples/dotnet/publish-multi-sln.yml`, o `.sln` é passado como parâmetro do próprio workflow (`workflow_dispatch.inputs.solution_file`).
+
 ### NuGet (opcional / private feeds)
 
 Se voce precisa de feed privado, pode:

@@ -2,6 +2,10 @@ name: build-and-package (dotnet multi-project sln)
 
 on:
   workflow_dispatch:
+    inputs:
+      solution_file:
+        description: "Caminho do .sln (relativo ao repo)."
+        required: true
 
 jobs:
   build:
@@ -13,9 +17,8 @@ jobs:
         with:
           language: dotnet
           dotnet_version: 8.0.x
-          dotnet_project: MySolution.sln
+          dotnet_project: ${{ github.event.inputs.solution_file }}
           dotnet_publish_multi: "true"
           dotnet_configuration: Release
           dotnet_publish_dir: publish
           output_zip: app.zip
-
