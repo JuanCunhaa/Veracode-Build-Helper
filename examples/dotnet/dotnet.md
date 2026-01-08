@@ -127,11 +127,9 @@ Notas:
 
 - `dotnet_publish_dir`: default `publish` (saida do publish, relativo ao `working_directory`)
 - `package_paths`: se vazio, usa `${dotnet_publish_dir}/**`
-- `output_dir`: default `veracode` (saida fixa)
-- `output_zip`: default `app.zip` (somente filename; sempre salvo dentro de `output_dir`)
+- `output_zip`: default `app.zip` (somente filename; sempre salvo em `veracode/<output_zip>`)
 - `exclude_paths`: lista de globs para ignorar
-- `upload_artifact`: default `'true'` (faz upload do zip como artifact)
-- `artifact_name`: default `veracode-package`
+- Artifact: sempre publica `veracode-package` com o zip gerado (retention = padrão do GitHub).
 
 ## Outputs úteis
 

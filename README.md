@@ -21,4 +21,4 @@ Consulte a documentação e exemplos por linguagem/stack em `examples/`.
 
 ## Saída padrão
 
-O `.zip` gerado sai sempre em `veracode/` (ex.: `veracode/app.zip`) e é publicado como artifact do workflow por default.
+O `.zip` gerado sai sempre em `veracode/` (ex.: `veracode/app.zip`) e é publicado como artifact `veracode-package` (retention = padrão do GitHub).
