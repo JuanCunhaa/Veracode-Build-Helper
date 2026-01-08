@@ -79,7 +79,6 @@ def main() -> int:
         elif path.is_file():
             files.append(path)
 
-    # Deduplicate and filter
     uniq: dict[str, pathlib.Path] = {}
     for f in files:
         try:

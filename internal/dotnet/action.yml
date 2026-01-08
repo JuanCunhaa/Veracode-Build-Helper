@@ -17,7 +17,6 @@ inputs:
     required: false
     default: ""
 
-  # nuget (opcional)
   enable_nuget:
     required: false
     default: ""
@@ -90,7 +89,6 @@ inputs:
     required: false
     default: "false"
 
-  # MSBuild first-class
   verbosity:
     required: false
     default: ""
@@ -134,7 +132,6 @@ inputs:
     required: false
     default: "publish"
 
-  # multi-projeto
   publish_multi:
     required: false
     default: "false"
@@ -294,7 +291,6 @@ runs:
         $publishTrimmed = IsTrue '${{ inputs.publish_trimmed }}'
         $publishReadyToRun = IsTrue '${{ inputs.publish_ready_to_run }}'
 
-        # NuGet
         $enableNugetRaw = ('${{ inputs.enable_nuget }}' ?? '').Trim()
         $nugetAuthMode = (('${{ inputs.nuget_auth_mode }}' ?? 'dotnet').Trim()).ToLowerInvariant()
 

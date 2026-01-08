@@ -13,6 +13,10 @@ O formato e baseado no [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0
 - Validações melhores para `publish_multi` e NuGet.
 - Saída fixa do zip em `veracode/` e upload como artifact `veracode-package` (retention = padrão do GitHub).
 
+### Changed
+
+- Remove comentários dos arquivos de action e scripts (mantém apenas logs e mensagens de erro).
+
 ## [1.0.1] - 2026-01-08
 
 ### Changed

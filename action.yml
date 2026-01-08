@@ -15,7 +15,6 @@ inputs:
     required: false
     default: "."
 
-  # dotnet - setup
   dotnet_version:
     description: "Versão do .NET SDK (ex.: 8.0.x). Se vazio, não chama actions/setup-dotnet."
     required: false
@@ -25,13 +24,11 @@ inputs:
     required: false
     default: ""
 
-  # dotnet - alvo
   dotnet_project:
     description: "Caminho do .csproj/.fsproj/.vbproj/.sln (relativo ao working_directory). Vazio = diretório atual."
     required: false
     default: ""
 
-  # dotnet - execução
   dotnet_restore:
     description: "Se 'true', executa dotnet restore."
     required: false
@@ -49,7 +46,6 @@ inputs:
     required: false
     default: "true"
 
-  # dotnet - parâmetros comuns
   dotnet_configuration:
     description: "Configuration (ex.: Release/Debug)."
     required: false
@@ -67,7 +63,6 @@ inputs:
     required: false
     default: "false"
 
-  # dotnet - MSBuild first-class
   dotnet_verbosity:
     description: "Verbosity do dotnet (ex.: quiet, minimal, normal, detailed, diagnostic)."
     required: false
@@ -89,7 +84,6 @@ inputs:
     required: false
     default: ""
 
-  # dotnet - publish flags (quando suportados)
   dotnet_publish_single_file:
     description: "PublishSingleFile ('true'/'false')."
     required: false
@@ -103,7 +97,6 @@ inputs:
     required: false
     default: "false"
 
-  # dotnet - override de argumentos (avançado)
   dotnet_restore_args:
     description: "Args extras para dotnet restore."
     required: false
@@ -125,7 +118,6 @@ inputs:
     required: false
     default: "publish"
 
-  # dotnet - multi-projeto (opcional)
   dotnet_publish_multi:
     description: "Se 'true', publica múltiplos projetos em subpastas dentro de dotnet_publish_dir."
     required: false
@@ -143,7 +135,6 @@ inputs:
     required: false
     default: ""
 
-  # dotnet - nuget (opcional)
   enable_nuget:
     description: "Se 'true', configura NuGet antes do restore (private feeds). Se vazio, ativa automaticamente quando algum nuget_* for informado."
     required: false
@@ -205,7 +196,6 @@ inputs:
     required: false
     default: "false"
 
-  # empacotamento
   package_paths:
     description: "Paths/globs para incluir no zip (multiline). Se vazio, usa o default do módulo (ex.: publish/** no dotnet)."
     required: false
