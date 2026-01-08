@@ -6,10 +6,23 @@ O formato e baseado no [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0
 
 ## [Unreleased]
 
+- N/A.
+
+## [1.0.1] - 2026-01-08
+
+### Changed
+
+- README simplificado para servir como guia breve, com links para docs detalhados em `examples/`.
+- Changelog organizado por releases.
+
+## [1.0.0] - 2026-01-08
+
 ### Added
 
-- Scaffold inicial da action (modulo `.NET` + empacotamento `.zip`).
-- Suporte opcional a NuGet/private feeds (via `nuget.config` ou `dotnet nuget add source`).
+- Action orquestradora + empacotamento `.zip` para Veracode.
+- Módulo `.NET` (restore/build/test/publish) com setup opcional do SDK.
+- MSBuild first-class: `verbosity`, `targets` e `properties`.
 - Args robustos (`dotnet_*_args`) com suporte a aspas.
-- MSBuild first-class (verbosity, targets e properties).
-- Publish multi-projeto (solution -> publica cada projeto em subpastas).
+- NuGet/private feeds avançado: `nuget.config` por path/inline e múltiplos sources, além de flags de restore.
+- Publish multi-projeto via `.sln` (publica cada projeto em subpastas).
+- Branding do Marketplace (`shield`, `purple`).
