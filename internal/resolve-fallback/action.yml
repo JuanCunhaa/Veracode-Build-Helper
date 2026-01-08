@@ -1,0 +1,36 @@
+name: Resolve Fallback
+description: Retorna preferred se existir, senão fallback (multiline safe).
+
+inputs:
+  preferred:
+    required: false
+    default: ""
+  fallback:
+    required: false
+    default: ""
+
+outputs:
+  value:
+    value: ${{ steps.resolve.outputs.value }}
+
+runs:
+  using: composite
+  steps:
+    - id: resolve
+      shell: node {0}
+      run: |
+        const fs = require('fs');
+
+        function getInput(name) {
+          const envName = `INPUT_${name.replace(/ /g, '_').toUpperCase()}`;
+          return process.env[envName] ?? '';
+        }
+
+        const preferred = getInput('preferred') || '';
+        const fallback = getInput('fallback') || '';
+        const value = preferred.trim().length > 0 ? preferred : fallback;
+
+        const outPath = process.env.GITHUB_OUTPUT;
+        if (!outPath) throw new Error('GITHUB_OUTPUT not set');
+        fs.appendFileSync(outPath, `value<<__EOF__\n${value}\n__EOF__\n`, 'utf8');
+

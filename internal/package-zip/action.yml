@@ -1,0 +1,56 @@
+name: Package Zip
+description: Gera um .zip a partir de include/exclude (multiline) usando Python zipfile.
+
+inputs:
+  working_directory:
+    required: false
+    default: "."
+  output_zip:
+    required: false
+    default: "app.zip"
+  include_paths:
+    required: false
+    default: ""
+  exclude_paths:
+    required: false
+    default: ""
+  fail_on_empty_zip:
+    required: false
+    default: "true"
+
+outputs:
+  zip_path:
+    value: ${{ steps.zip.outputs.zip_path }}
+  zip_bytes:
+    value: ${{ steps.zip.outputs.zip_bytes }}
+  zip_files:
+    value: ${{ steps.zip.outputs.zip_files }}
+
+runs:
+  using: composite
+  steps:
+    - name: Zip
+      id: zip
+      shell: pwsh
+      run: |
+        $python = (Get-Command python -ErrorAction SilentlyContinue)?.Source
+        if (-not $python) { $python = (Get-Command python3 -ErrorAction SilentlyContinue)?.Source }
+        if (-not $python) { throw "python/python3 nao encontrado no runner." }
+
+        $includeFile = Join-Path $env:RUNNER_TEMP "veracode-build-helper-include.txt"
+        $excludeFile = Join-Path $env:RUNNER_TEMP "veracode-build-helper-exclude.txt"
+
+        @'
+        ${{ inputs.include_paths }}
+        '@ | Out-File -FilePath $includeFile -Encoding utf8
+
+        @'
+        ${{ inputs.exclude_paths }}
+        '@ | Out-File -FilePath $excludeFile -Encoding utf8
+
+        & $python "${{ github.action_path }}/zip.py" `
+          --working-directory "${{ inputs.working_directory }}" `
+          --output-zip "${{ inputs.output_zip }}" `
+          --include-file "$includeFile" `
+          --exclude-file "$excludeFile" `
+          --fail-on-empty-zip "${{ inputs.fail_on_empty_zip }}"

@@ -1,0 +1,179 @@
+name: Dotnet Build
+description: Build/test/publish .NET com parâmetros e outputs para empacotamento.
+
+inputs:
+  working_directory:
+    required: false
+    default: "."
+
+  dotnet_version:
+    required: false
+    default: ""
+  dotnet_version_file:
+    required: false
+    default: ""
+
+  project:
+    required: false
+    default: ""
+
+  restore:
+    required: false
+    default: "true"
+  build:
+    required: false
+    default: "false"
+  test:
+    required: false
+    default: "false"
+  publish:
+    required: false
+    default: "true"
+
+  configuration:
+    required: false
+    default: "Release"
+  framework:
+    required: false
+    default: ""
+  runtime:
+    required: false
+    default: ""
+  self_contained:
+    required: false
+    default: "false"
+
+  publish_single_file:
+    required: false
+    default: "false"
+  publish_trimmed:
+    required: false
+    default: "false"
+  publish_ready_to_run:
+    required: false
+    default: "false"
+
+  restore_args:
+    required: false
+    default: ""
+  build_args:
+    required: false
+    default: ""
+  test_args:
+    required: false
+    default: ""
+  publish_args:
+    required: false
+    default: ""
+
+  publish_dir:
+    required: false
+    default: "publish"
+
+outputs:
+  language_effective:
+    value: ${{ steps.meta.outputs.language_effective }}
+  build_ran:
+    value: ${{ steps.meta.outputs.build_ran }}
+  publish_dir:
+    value: ${{ steps.meta.outputs.publish_dir }}
+  package_paths_default:
+    value: ${{ steps.meta.outputs.package_paths_default }}
+
+runs:
+  using: composite
+  steps:
+    - name: Setup .NET
+      if: inputs.dotnet_version != '' || inputs.dotnet_version_file != ''
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ inputs.dotnet_version }}
+        dotnet-version-file: ${{ inputs.dotnet_version_file }}
+
+    - name: Dotnet build/test/publish
+      id: meta
+      shell: pwsh
+      working-directory: ${{ inputs.working_directory }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+
+        function IsTrue([string]$v) {
+          return ($v ?? '').Trim().ToLowerInvariant() -eq 'true'
+        }
+
+        $project = ('${{ inputs.project }}' ?? '').Trim()
+        $target = if ([string]::IsNullOrWhiteSpace($project)) { '.' } else { $project }
+
+        $restore = IsTrue '${{ inputs.restore }}'
+        $build = IsTrue '${{ inputs.build }}'
+        $test = IsTrue '${{ inputs.test }}'
+        $publish = IsTrue '${{ inputs.publish }}'
+
+        $configuration = ('${{ inputs.configuration }}' ?? '').Trim()
+        $framework = ('${{ inputs.framework }}' ?? '').Trim()
+        $runtime = ('${{ inputs.runtime }}' ?? '').Trim()
+        $selfContained = ('${{ inputs.self_contained }}' ?? '').Trim().ToLowerInvariant()
+
+        $restoreArgs = ('${{ inputs.restore_args }}' ?? '').Trim()
+        $buildArgs = ('${{ inputs.build_args }}' ?? '').Trim()
+        $testArgs = ('${{ inputs.test_args }}' ?? '').Trim()
+        $publishArgs = ('${{ inputs.publish_args }}' ?? '').Trim()
+
+        $publishDir = ('${{ inputs.publish_dir }}' ?? '').Trim()
+        if ([string]::IsNullOrWhiteSpace($publishDir)) { $publishDir = 'publish' }
+
+        $publishSingleFile = IsTrue '${{ inputs.publish_single_file }}'
+        $publishTrimmed = IsTrue '${{ inputs.publish_trimmed }}'
+        $publishReadyToRun = IsTrue '${{ inputs.publish_ready_to_run }}'
+
+        $ran = $restore -or $build -or $test -or $publish
+
+        function Run([string]$title, [string]$command) {
+          Write-Host "::group::$title"
+          Write-Host $command
+          Invoke-Expression $command
+          if ($LASTEXITCODE -ne 0) { throw "$title falhou com exit code $LASTEXITCODE" }
+          Write-Host "::endgroup::"
+        }
+
+        if ($restore) {
+          $cmd = "dotnet restore `"$target`""
+          if ($restoreArgs) { $cmd += " $restoreArgs" }
+          Run "dotnet restore" $cmd
+        }
+
+        if ($build) {
+          $cmd = "dotnet build `"$target`" -c `"$configuration`""
+          if ($restore) { $cmd += " --no-restore" }
+          if ($framework) { $cmd += " -f `"$framework`"" }
+          if ($buildArgs) { $cmd += " $buildArgs" }
+          Run "dotnet build" $cmd
+        }
+
+        if ($test) {
+          $cmd = "dotnet test `"$target`" -c `"$configuration`""
+          if ($build) { $cmd += " --no-build" }
+          if ($restore) { $cmd += " --no-restore" }
+          if ($framework) { $cmd += " -f `"$framework`"" }
+          if ($testArgs) { $cmd += " $testArgs" }
+          Run "dotnet test" $cmd
+        }
+
+        if ($publish) {
+          $cmd = "dotnet publish `"$target`" -c `"$configuration`" -o `"$publishDir`""
+          if ($restore) { $cmd += " --no-restore" }
+          if ($framework) { $cmd += " -f `"$framework`"" }
+          if ($runtime) { $cmd += " -r `"$runtime`"" }
+          if ($selfContained) { $cmd += " --self-contained $selfContained" }
+          if ($publishSingleFile) { $cmd += " -p:PublishSingleFile=true" }
+          if ($publishTrimmed) { $cmd += " -p:PublishTrimmed=true" }
+          if ($publishReadyToRun) { $cmd += " -p:PublishReadyToRun=true" }
+          if ($publishArgs) { $cmd += " $publishArgs" }
+          Run "dotnet publish" $cmd
+        }
+
+        "language_effective=dotnet" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        "build_ran=$($ran.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        "publish_dir=$publishDir" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        "package_paths_default<<__EOF__`n$publishDir/**`n__EOF__" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+

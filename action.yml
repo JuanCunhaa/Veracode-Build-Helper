@@ -1,0 +1,193 @@
+name: Veracode Build Helper
+description: Facilitador de build e empacotamento (.zip) para Veracode, começando por .NET (com parâmetros completos e extensíveis).
+author: Bantuu
+
+inputs:
+  language:
+    description: "Linguagem/módulo a usar (por enquanto: dotnet)."
+    required: false
+    default: "dotnet"
+  working_directory:
+    description: Diretório base para build e empacotamento.
+    required: false
+    default: "."
+
+  # dotnet - setup
+  dotnet_version:
+    description: "Versão do .NET SDK (ex.: 8.0.x). Se vazio, não chama actions/setup-dotnet."
+    required: false
+    default: ""
+  dotnet_version_file:
+    description: "Arquivo com versão do SDK (ex.: global.json). Alternativa a dotnet_version."
+    required: false
+    default: ""
+
+  # dotnet - alvo
+  dotnet_project:
+    description: "Caminho do .csproj/.fsproj/.vbproj/.sln (relativo ao working_directory). Vazio = diretório atual."
+    required: false
+    default: ""
+
+  # dotnet - execução
+  dotnet_restore:
+    description: "Se 'true', executa dotnet restore."
+    required: false
+    default: "true"
+  dotnet_build:
+    description: "Se 'true', executa dotnet build."
+    required: false
+    default: "false"
+  dotnet_test:
+    description: "Se 'true', executa dotnet test."
+    required: false
+    default: "false"
+  dotnet_publish:
+    description: "Se 'true', executa dotnet publish (recomendado para empacotar)."
+    required: false
+    default: "true"
+
+  # dotnet - parâmetros comuns
+  dotnet_configuration:
+    description: "Configuration (ex.: Release/Debug)."
+    required: false
+    default: "Release"
+  dotnet_framework:
+    description: "TargetFramework (ex.: net8.0)."
+    required: false
+    default: ""
+  dotnet_runtime:
+    description: "RID (ex.: win-x64, linux-x64, osx-x64)."
+    required: false
+    default: ""
+  dotnet_self_contained:
+    description: "Self-contained publish ('true'/'false')."
+    required: false
+    default: "false"
+
+  # dotnet - publish flags (quando suportados)
+  dotnet_publish_single_file:
+    description: "PublishSingleFile ('true'/'false')."
+    required: false
+    default: "false"
+  dotnet_publish_trimmed:
+    description: "PublishTrimmed ('true'/'false')."
+    required: false
+    default: "false"
+  dotnet_publish_ready_to_run:
+    description: "PublishReadyToRun ('true'/'false')."
+    required: false
+    default: "false"
+
+  # dotnet - override de argumentos (avançado)
+  dotnet_restore_args:
+    description: "Args extras para dotnet restore."
+    required: false
+    default: ""
+  dotnet_build_args:
+    description: "Args extras para dotnet build."
+    required: false
+    default: ""
+  dotnet_test_args:
+    description: "Args extras para dotnet test."
+    required: false
+    default: ""
+  dotnet_publish_args:
+    description: "Args extras para dotnet publish."
+    required: false
+    default: ""
+  dotnet_publish_dir:
+    description: "Diretório de saída do publish (relativo ao working_directory)."
+    required: false
+    default: "publish"
+
+  # empacotamento
+  package_paths:
+    description: "Paths/globs para incluir no zip (multiline). Se vazio, usa o default do módulo (ex.: publish/** no dotnet)."
+    required: false
+    default: ""
+  exclude_paths:
+    description: "Paths/globs para excluir do zip (multiline)."
+    required: false
+    default: |
+      .git/**
+      .github/**
+      **/.git/**
+      **/.github/**
+      **/.DS_Store
+      **/node_modules/**
+  output_zip:
+    description: Nome/caminho do zip gerado (relativo ao workspace).
+    required: false
+    default: "app.zip"
+  fail_on_empty_zip:
+    description: "Se 'true', falha se nenhum arquivo for empacotado."
+    required: false
+    default: "true"
+
+outputs:
+  zip_path:
+    description: Caminho do zip gerado (relativo ao workspace).
+    value: ${{ steps.package.outputs.zip_path }}
+  zip_bytes:
+    description: Tamanho do zip em bytes.
+    value: ${{ steps.package.outputs.zip_bytes }}
+  zip_files:
+    description: Quantidade de arquivos dentro do zip.
+    value: ${{ steps.package.outputs.zip_files }}
+  build_ran:
+    description: "'true'/'false' indicando se build_commands executou."
+    value: ${{ steps.dotnet.outputs.build_ran }}
+  language_effective:
+    description: Preset efetivo usado (ou vazio).
+    value: ${{ steps.dotnet.outputs.language_effective }}
+  dotnet_publish_dir:
+    description: Diretório efetivo do publish (relativo ao working_directory).
+    value: ${{ steps.dotnet.outputs.publish_dir }}
+
+runs:
+  using: composite
+  steps:
+    - name: Dotnet build
+      id: dotnet
+      if: inputs.language == 'dotnet'
+      uses: ./internal/dotnet
+      with:
+        working_directory: ${{ inputs.working_directory }}
+        dotnet_version: ${{ inputs.dotnet_version }}
+        dotnet_version_file: ${{ inputs.dotnet_version_file }}
+        project: ${{ inputs.dotnet_project }}
+        restore: ${{ inputs.dotnet_restore }}
+        build: ${{ inputs.dotnet_build }}
+        test: ${{ inputs.dotnet_test }}
+        publish: ${{ inputs.dotnet_publish }}
+        configuration: ${{ inputs.dotnet_configuration }}
+        framework: ${{ inputs.dotnet_framework }}
+        runtime: ${{ inputs.dotnet_runtime }}
+        self_contained: ${{ inputs.dotnet_self_contained }}
+        publish_single_file: ${{ inputs.dotnet_publish_single_file }}
+        publish_trimmed: ${{ inputs.dotnet_publish_trimmed }}
+        publish_ready_to_run: ${{ inputs.dotnet_publish_ready_to_run }}
+        restore_args: ${{ inputs.dotnet_restore_args }}
+        build_args: ${{ inputs.dotnet_build_args }}
+        test_args: ${{ inputs.dotnet_test_args }}
+        publish_args: ${{ inputs.dotnet_publish_args }}
+        publish_dir: ${{ inputs.dotnet_publish_dir }}
+
+    - name: Resolve include paths
+      id: include
+      if: inputs.language == 'dotnet'
+      uses: ./internal/resolve-fallback
+      with:
+        preferred: ${{ inputs.package_paths }}
+        fallback: ${{ steps.dotnet.outputs.package_paths_default }}
+
+    - name: Package zip
+      id: package
+      if: inputs.language == 'dotnet'
+      uses: ./internal/package-zip
+      with:
+        working_directory: ${{ inputs.working_directory }}
+        output_zip: ${{ inputs.output_zip }}
+        include_paths: ${{ steps.include.outputs.value }}
+        exclude_paths: ${{ inputs.exclude_paths }}
+        fail_on_empty_zip: ${{ inputs.fail_on_empty_zip }}
