@@ -1,6 +1,9 @@
 name: Veracode Build Helper
 description: Facilitador de build e empacotamento (.zip) para Veracode, começando por .NET (com parâmetros completos e extensíveis).
 author: Bantuu
+branding:
+  icon: shield
+  color: purple
 
 inputs:
   language:
