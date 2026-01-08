@@ -220,14 +220,30 @@ inputs:
       **/.github/**
       **/.DS_Store
       **/node_modules/**
+  output_dir:
+    description: "Diretório fixo para saída do zip (relativo ao workspace)."
+    required: false
+    default: "veracode"
   output_zip:
-    description: Nome/caminho do zip gerado (relativo ao workspace).
+    description: "Nome do zip gerado (somente o filename; será sempre salvo dentro de output_dir)."
     required: false
     default: "app.zip"
   fail_on_empty_zip:
     description: "Se 'true', falha se nenhum arquivo for empacotado."
     required: false
     default: "true"
+  upload_artifact:
+    description: "Se 'true', faz upload do zip como artifact do workflow."
+    required: false
+    default: "true"
+  artifact_name:
+    description: "Nome do artifact publicado."
+    required: false
+    default: "veracode-package"
+  artifact_retention_days:
+    description: "Retention days do artifact (1-90). Vazio = default do GitHub."
+    required: false
+    default: ""
 
 outputs:
   zip_path:
@@ -248,6 +264,9 @@ outputs:
   dotnet_publish_dir:
     description: Diretório efetivo do publish (relativo ao working_directory).
     value: ${{ steps.dotnet.outputs.publish_dir }}
+  artifact_name:
+    description: Nome do artifact publicado.
+    value: ${{ inputs.artifact_name }}
 
 runs:
   using: composite
@@ -310,13 +329,50 @@ runs:
         preferred: ${{ inputs.package_paths }}
         fallback: ${{ steps.dotnet.outputs.package_paths_default }}
 
+    - name: Resolve output zip path
+      id: out
+      if: inputs.language == 'dotnet'
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+
+        $dir = ('${{ inputs.output_dir }}' ?? '').Trim()
+        if ([string]::IsNullOrWhiteSpace($dir)) { $dir = 'veracode' }
+
+        $file = ('${{ inputs.output_zip }}' ?? '').Trim()
+        if ([string]::IsNullOrWhiteSpace($file)) { $file = 'app.zip' }
+
+        $fileName = [System.IO.Path]::GetFileName($file)
+        if ([string]::IsNullOrWhiteSpace($fileName)) { throw "output_zip invalido: '$file'" }
+
+        $zipPath = Join-Path $dir $fileName
+        $zipPath = $zipPath.Replace('\\','/')
+        "zip_path=$zipPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
     - name: Package zip
       id: package
       if: inputs.language == 'dotnet'
       uses: ./internal/package-zip
       with:
         working_directory: ${{ inputs.working_directory }}
-        output_zip: ${{ inputs.output_zip }}
+        output_zip: ${{ steps.out.outputs.zip_path }}
         include_paths: ${{ steps.include.outputs.value }}
         exclude_paths: ${{ inputs.exclude_paths }}
         fail_on_empty_zip: ${{ inputs.fail_on_empty_zip }}
+
+    - name: Upload artifact (default retention)
+      if: inputs.language == 'dotnet' && inputs.upload_artifact == 'true' && inputs.artifact_retention_days == ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact_name }}
+        path: ${{ steps.package.outputs.zip_path }}
+        if-no-files-found: error
+
+    - name: Upload artifact (custom retention)
+      if: inputs.language == 'dotnet' && inputs.upload_artifact == 'true' && inputs.artifact_retention_days != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact_name }}
+        path: ${{ steps.package.outputs.zip_path }}
+        if-no-files-found: error
+        retention-days: ${{ inputs.artifact_retention_days }}

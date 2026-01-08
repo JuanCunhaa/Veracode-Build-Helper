@@ -18,3 +18,7 @@ Consulte a documentação e exemplos por linguagem/stack em `examples/`.
 - .NET (multi-projeto via .sln): `examples/dotnet/publish-multi-sln.yml`
 - .NET (NuGet feed privado): `examples/dotnet/nuget-private-feed.yml`
 - .NET (GitHub Packages): `examples/dotnet/nuget-github-packages.yml`
+
+## Saída padrão
+
+O `.zip` gerado sai sempre em `veracode/` (ex.: `veracode/app.zip`) e é publicado como artifact do workflow por default.

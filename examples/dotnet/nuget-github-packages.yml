@@ -25,4 +25,6 @@ jobs:
           dotnet_publish_multi: "true"
           dotnet_configuration: Release
           dotnet_publish_dir: publish
+          output_dir: veracode
           output_zip: app.zip
+          artifact_name: veracode-package
