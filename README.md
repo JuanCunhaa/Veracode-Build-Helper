@@ -18,6 +18,7 @@ Observacoes:
 
 - Esta Action pode instalar o .NET SDK via `actions/setup-dotnet` quando voce informa `dotnet_version`/`dotnet_version_file`. Para outras stacks, use `actions/setup-*` no seu workflow.
 - No `dotnet`, a action pode chamar `actions/setup-dotnet` automaticamente se voce informar `dotnet_version` ou `dotnet_version_file`.
+- No `dotnet`, existe suporte opcional a NuGet/private feeds (ver `examples/dotnet/dotnet.md`).
 - `package_paths`/`exclude_paths` sao globs relativos a `working_directory` e viram paths relativos dentro do zip.
 
 ## Linguagens
@@ -47,9 +48,11 @@ Os inputs específicos de .NET ficam documentados em `examples/dotnet/dotnet.md`
 | `zip_bytes` | Tamanho do zip em bytes. |
 | `zip_files` | Quantidade de arquivos dentro do zip. |
 | `build_ran` | `'true'/'false'` indicando se build rodou. |
-| `language_effective` | Preset efetivo usado (ou vazio). |
+| `language_effective` | Módulo efetivo usado (ou vazio). |
 | `dotnet_publish_dir` | Diretório efetivo do publish (relativo ao `working_directory`). |
 
 ## Exemplos
 
 - .NET (publish + package) -> [abrir](examples/dotnet/publish-and-package.yml)
+- .NET (multi-projeto via .sln) -> [abrir](examples/dotnet/publish-multi-sln.yml)
+- .NET (NuGet feed privado) -> [abrir](examples/dotnet/nuget-private-feed.yml)

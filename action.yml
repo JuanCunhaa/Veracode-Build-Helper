@@ -64,6 +64,28 @@ inputs:
     required: false
     default: "false"
 
+  # dotnet - MSBuild first-class
+  dotnet_verbosity:
+    description: "Verbosity do dotnet (ex.: quiet, minimal, normal, detailed, diagnostic)."
+    required: false
+    default: ""
+  dotnet_nologo:
+    description: "Se 'true', passa --nologo."
+    required: false
+    default: "false"
+  dotnet_disable_parallel:
+    description: "Se 'true', passa --disable-parallel (quando suportado)."
+    required: false
+    default: "false"
+  dotnet_msbuild_targets:
+    description: "Targets MSBuild (ex.: Build;Publish)."
+    required: false
+    default: ""
+  dotnet_msbuild_properties:
+    description: "Propriedades MSBuild (multiline). Cada linha pode ser Name=Value ou -p:Name=Value."
+    required: false
+    default: ""
+
   # dotnet - publish flags (quando suportados)
   dotnet_publish_single_file:
     description: "PublishSingleFile ('true'/'false')."
@@ -100,6 +122,70 @@ inputs:
     required: false
     default: "publish"
 
+  # dotnet - multi-projeto (opcional)
+  dotnet_publish_multi:
+    description: "Se 'true', publica múltiplos projetos em subpastas dentro de dotnet_publish_dir."
+    required: false
+    default: "false"
+  dotnet_projects:
+    description: "Lista (multiline) de projetos para publish (paths .csproj). Se vazio e dotnet_project for .sln, usa 'dotnet sln list'."
+    required: false
+    default: ""
+
+  # dotnet - nuget (opcional)
+  enable_nuget:
+    description: "Se 'true', configura NuGet antes do restore (private feeds). Se vazio, ativa automaticamente quando algum nuget_* for informado."
+    required: false
+    default: ""
+  nuget_config_path:
+    description: "Path do nuget.config (relativo ao working_directory) para usar no restore."
+    required: false
+    default: ""
+  nuget_config_content:
+    description: "Conteúdo do nuget.config (multiline). Se informado, gera um arquivo temporário e usa no restore."
+    required: false
+    default: ""
+  nuget_source_url:
+    description: "URL do feed para adicionar via 'dotnet nuget add source'."
+    required: false
+    default: ""
+  nuget_source_name:
+    description: "Nome do source a ser adicionado (default: 'private')."
+    required: false
+    default: "private"
+  nuget_username:
+    description: "Username para o source (quando usar auth por username/password)."
+    required: false
+    default: "token"
+  nuget_password:
+    description: "Password/token para o source (use secrets)."
+    required: false
+    default: ""
+  nuget_sources:
+    description: "Lista (multiline) de sources no formato name|url|username|password (username/password opcionais)."
+    required: false
+    default: ""
+  nuget_locked_mode:
+    description: "Se 'true', passa --locked-mode no restore."
+    required: false
+    default: "false"
+  nuget_ignore_failed_sources:
+    description: "Se 'true', passa --ignore-failed-sources no restore."
+    required: false
+    default: "false"
+  nuget_interactive:
+    description: "Se 'true', passa --interactive no restore."
+    required: false
+    default: "false"
+  nuget_packages_dir:
+    description: "Diretório de packages para o restore (--packages)."
+    required: false
+    default: ""
+  nuget_no_cache:
+    description: "Se 'true', passa --no-cache no restore."
+    required: false
+    default: "false"
+
   # empacotamento
   package_paths:
     description: "Paths/globs para incluir no zip (multiline). Se vazio, usa o default do módulo (ex.: publish/** no dotnet)."
@@ -135,10 +221,10 @@ outputs:
     description: Quantidade de arquivos dentro do zip.
     value: ${{ steps.package.outputs.zip_files }}
   build_ran:
-    description: "'true'/'false' indicando se build_commands executou."
+    description: "'true'/'false' indicando se o build (dotnet) rodou."
     value: ${{ steps.dotnet.outputs.build_ran }}
   language_effective:
-    description: Preset efetivo usado (ou vazio).
+    description: Módulo efetivo usado (ou vazio).
     value: ${{ steps.dotnet.outputs.language_effective }}
   dotnet_publish_dir:
     description: Diretório efetivo do publish (relativo ao working_directory).
@@ -156,6 +242,19 @@ runs:
         dotnet_version: ${{ inputs.dotnet_version }}
         dotnet_version_file: ${{ inputs.dotnet_version_file }}
         project: ${{ inputs.dotnet_project }}
+        enable_nuget: ${{ inputs.enable_nuget }}
+        nuget_config_path: ${{ inputs.nuget_config_path }}
+        nuget_config_content: ${{ inputs.nuget_config_content }}
+        nuget_source_url: ${{ inputs.nuget_source_url }}
+        nuget_source_name: ${{ inputs.nuget_source_name }}
+        nuget_username: ${{ inputs.nuget_username }}
+        nuget_password: ${{ inputs.nuget_password }}
+        nuget_sources: ${{ inputs.nuget_sources }}
+        nuget_locked_mode: ${{ inputs.nuget_locked_mode }}
+        nuget_ignore_failed_sources: ${{ inputs.nuget_ignore_failed_sources }}
+        nuget_interactive: ${{ inputs.nuget_interactive }}
+        nuget_packages_dir: ${{ inputs.nuget_packages_dir }}
+        nuget_no_cache: ${{ inputs.nuget_no_cache }}
         restore: ${{ inputs.dotnet_restore }}
         build: ${{ inputs.dotnet_build }}
         test: ${{ inputs.dotnet_test }}
@@ -164,6 +263,11 @@ runs:
         framework: ${{ inputs.dotnet_framework }}
         runtime: ${{ inputs.dotnet_runtime }}
         self_contained: ${{ inputs.dotnet_self_contained }}
+        verbosity: ${{ inputs.dotnet_verbosity }}
+        nologo: ${{ inputs.dotnet_nologo }}
+        disable_parallel: ${{ inputs.dotnet_disable_parallel }}
+        msbuild_targets: ${{ inputs.dotnet_msbuild_targets }}
+        msbuild_properties: ${{ inputs.dotnet_msbuild_properties }}
         publish_single_file: ${{ inputs.dotnet_publish_single_file }}
         publish_trimmed: ${{ inputs.dotnet_publish_trimmed }}
         publish_ready_to_run: ${{ inputs.dotnet_publish_ready_to_run }}
@@ -172,6 +276,8 @@ runs:
         test_args: ${{ inputs.dotnet_test_args }}
         publish_args: ${{ inputs.dotnet_publish_args }}
         publish_dir: ${{ inputs.dotnet_publish_dir }}
+        publish_multi: ${{ inputs.dotnet_publish_multi }}
+        projects: ${{ inputs.dotnet_projects }}
 
     - name: Resolve include paths
       id: include

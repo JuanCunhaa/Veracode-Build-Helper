@@ -13,6 +13,17 @@ Use o `dotnet publish` e empacote o output:
 
 ## Inputs (action principal)
 
+## Windows vs Ubuntu
+
+O build via `dotnet` funciona em Linux/macOS/Windows (o `dotnet` usa MSBuild internamente).
+
+Quando vale escolher **Windows** no workflow:
+
+- Projetos **.NET Framework** legados (dependem do MSBuild/VS Build Tools);
+- Builds que exigem componentes exclusivos do Windows (ex.: alguns targets antigos).
+
+Para projetos modernos (.NET 6/7/8), **Ubuntu** geralmente e suficiente e mais rapido.
+
 ### Seleção do modulo
 
 - `language`: por enquanto use `dotnet`
@@ -56,6 +67,48 @@ Se precisar de algo que nao existe como input, use os `*_args` para passar flags
 - `dotnet_test_args`
 - `dotnet_publish_args`
 
+Os `*_args` agora suportam aspas corretamente (ex.: `--property:"Name=Value with spaces"`).
+
+### MSBuild (first-class)
+
+- `dotnet_verbosity`: ex.: `minimal`, `normal`, `detailed`, `diagnostic`
+- `dotnet_nologo`: `'true'/'false'`
+- `dotnet_disable_parallel`: `'true'/'false'`
+- `dotnet_msbuild_targets`: ex.: `Build;Publish`
+- `dotnet_msbuild_properties`: multiline (ex.: `ContinuousIntegrationBuild=true`)
+
+### Multi-projeto (publish)
+
+Quando `dotnet_publish_multi: 'true'`:
+
+- Se `dotnet_projects` estiver preenchido (multiline), publica cada `.csproj` em `dotnet_publish_dir/<ProjectName>/`.
+- Se `dotnet_projects` estiver vazio e `dotnet_project` for `.sln`, usa `dotnet sln <sln> list` para descobrir os projetos e publica todos.
+
+### NuGet (opcional / private feeds)
+
+Se voce precisa de feed privado, pode:
+
+1) informar um `nuget.config` do repo, ou
+2) adicionar um source via inputs.
+
+Inputs:
+
+- `enable_nuget`: `'true'/'false'` ou vazio (vazio = auto quando algum `nuget_*` for informado)
+- `nuget_config_path`: path do `nuget.config` (relativo ao `working_directory`)
+- `nuget_config_content`: conteudo inline do `nuget.config` (gera arquivo temporario)
+- `nuget_source_url`: URL do feed
+- `nuget_source_name`: default `private`
+- `nuget_username`: default `token`
+- `nuget_password`: token/senha (use `secrets.*`)
+- `nuget_sources`: multiline `name|url|username|password` (username/password opcionais)
+- `nuget_locked_mode`: `'true'/'false'` (restore)
+- `nuget_ignore_failed_sources`: `'true'/'false'` (restore)
+- `nuget_interactive`: `'true'/'false'` (restore)
+- `nuget_packages_dir`: path (restore)
+- `nuget_no_cache`: `'true'/'false'` (restore)
+
+Nota: para adicionar source com credenciais, o `dotnet` exige `--store-password-in-clear-text` (fica apenas no runner do job).
+
 ### Empacotamento
 
 - `dotnet_publish_dir`: default `publish` (saida do publish, relativo ao `working_directory`)
@@ -67,4 +120,3 @@ Se precisar de algo que nao existe como input, use os `*_args` para passar flags
 
 - `zip_path`, `zip_bytes`, `zip_files`
 - `dotnet_publish_dir`
-

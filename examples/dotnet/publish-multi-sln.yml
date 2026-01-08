@@ -1,4 +1,4 @@
-name: build-and-package (dotnet)
+name: build-and-package (dotnet multi-project sln)
 
 on:
   workflow_dispatch:
@@ -13,8 +13,9 @@ jobs:
         with:
           language: dotnet
           dotnet_version: 8.0.x
-          dotnet_project: ""
-          dotnet_publish: "true"
+          dotnet_project: MySolution.sln
+          dotnet_publish_multi: "true"
           dotnet_configuration: Release
           dotnet_publish_dir: publish
           output_zip: app.zip
+

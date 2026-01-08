@@ -1,4 +1,4 @@
-name: build-and-package (dotnet)
+name: build-and-package (dotnet nuget private feed)
 
 on:
   workflow_dispatch:
@@ -13,8 +13,13 @@ jobs:
         with:
           language: dotnet
           dotnet_version: 8.0.x
-          dotnet_project: ""
+          dotnet_project: MySolution.sln
+          enable_nuget: "true"
+          nuget_sources: |
+            private|https://example.com/nuget/v3/index.json|token|${{ secrets.NUGET_TOKEN }}
           dotnet_publish: "true"
+          dotnet_publish_multi: "true"
           dotnet_configuration: Release
           dotnet_publish_dir: publish
           output_zip: app.zip
+

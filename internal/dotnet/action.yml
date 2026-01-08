@@ -1,5 +1,5 @@
 name: Dotnet Build
-description: Build/test/publish .NET com parâmetros e outputs para empacotamento.
+description: Build/test/publish .NET com parametros e outputs para empacotamento.
 
 inputs:
   working_directory:
@@ -16,6 +16,47 @@ inputs:
   project:
     required: false
     default: ""
+
+  # nuget (opcional)
+  enable_nuget:
+    required: false
+    default: ""
+  nuget_config_path:
+    required: false
+    default: ""
+  nuget_config_content:
+    required: false
+    default: ""
+  nuget_source_url:
+    required: false
+    default: ""
+  nuget_source_name:
+    required: false
+    default: "private"
+  nuget_username:
+    required: false
+    default: "token"
+  nuget_password:
+    required: false
+    default: ""
+  nuget_sources:
+    required: false
+    default: ""
+  nuget_locked_mode:
+    required: false
+    default: "false"
+  nuget_ignore_failed_sources:
+    required: false
+    default: "false"
+  nuget_interactive:
+    required: false
+    default: "false"
+  nuget_packages_dir:
+    required: false
+    default: ""
+  nuget_no_cache:
+    required: false
+    default: "false"
 
   restore:
     required: false
@@ -42,6 +83,23 @@ inputs:
   self_contained:
     required: false
     default: "false"
+
+  # MSBuild first-class
+  verbosity:
+    required: false
+    default: ""
+  nologo:
+    required: false
+    default: "false"
+  disable_parallel:
+    required: false
+    default: "false"
+  msbuild_targets:
+    required: false
+    default: ""
+  msbuild_properties:
+    required: false
+    default: ""
 
   publish_single_file:
     required: false
@@ -70,6 +128,14 @@ inputs:
     required: false
     default: "publish"
 
+  # multi-projeto
+  publish_multi:
+    required: false
+    default: "false"
+  projects:
+    required: false
+    default: ""
+
 outputs:
   language_effective:
     value: ${{ steps.meta.outputs.language_effective }}
@@ -97,8 +163,82 @@ runs:
       run: |
         $ErrorActionPreference = 'Stop'
 
-        function IsTrue([string]$v) {
-          return ($v ?? '').Trim().ToLowerInvariant() -eq 'true'
+        function IsTrue([string]$v) { return ($v ?? '').Trim().ToLowerInvariant() -eq 'true' }
+        function IsSet([string]$v) { return -not [string]::IsNullOrWhiteSpace(($v ?? '').Trim()) }
+
+        function Split-Args([string]$s) {
+          if (-not (IsSet $s)) { return @() }
+
+          $args = New-Object System.Collections.Generic.List[string]
+          $current = New-Object System.Text.StringBuilder
+          $inSingle = $false
+          $inDouble = $false
+          $escape = $false
+
+          foreach ($ch in $s.ToCharArray()) {
+            if ($escape) {
+              [void]$current.Append($ch)
+              $escape = $false
+              continue
+            }
+
+            if ($ch -eq '\' -and -not $inSingle) {
+              $escape = $true
+              continue
+            }
+
+            if ($ch -eq '"' -and -not $inSingle) {
+              $inDouble = -not $inDouble
+              continue
+            }
+
+            if ($ch -eq "'" -and -not $inDouble) {
+              $inSingle = -not $inSingle
+              continue
+            }
+
+            if (-not $inSingle -and -not $inDouble -and [char]::IsWhiteSpace($ch)) {
+              if ($current.Length -gt 0) {
+                $args.Add($current.ToString())
+                $null = $current.Clear()
+              }
+              continue
+            }
+
+            [void]$current.Append($ch)
+          }
+
+          if ($escape) { [void]$current.Append('\') }
+          if ($current.Length -gt 0) { $args.Add($current.ToString()) }
+          return $args.ToArray()
+        }
+
+        function Read-Lines([string]$text) {
+          if (-not (IsSet $text)) { return @() }
+          return @(
+            $text -split "(`r`n|`n|`r)" |
+              ForEach-Object { $_.Trim() } |
+              Where-Object { $_ -ne '' }
+          )
+        }
+
+        function Normalize-MsbuildProperties([string]$text) {
+          $props = New-Object System.Collections.Generic.List[string]
+          foreach ($line in (Read-Lines $text)) {
+            $l = $line.Trim()
+            if ($l.StartsWith('/p:')) { $l = '-p:' + $l.Substring(3) }
+            if ($l.StartsWith('-p:')) { $props.Add($l); continue }
+            if ($l -match '^[A-Za-z0-9_.-]+=(.*)$') { $props.Add("-p:$l"); continue }
+            $props.Add($l)
+          }
+          return $props.ToArray()
+        }
+
+        function Run([string]$title, [ScriptBlock]$block) {
+          Write-Host "::group::$title"
+          & $block
+          if ($LASTEXITCODE -ne 0) { throw "$title falhou com exit code $LASTEXITCODE" }
+          Write-Host "::endgroup::"
         }
 
         $project = ('${{ inputs.project }}' ?? '').Trim()
@@ -108,16 +248,23 @@ runs:
         $build = IsTrue '${{ inputs.build }}'
         $test = IsTrue '${{ inputs.test }}'
         $publish = IsTrue '${{ inputs.publish }}'
+        $ran = $restore -or $build -or $test -or $publish
 
         $configuration = ('${{ inputs.configuration }}' ?? '').Trim()
         $framework = ('${{ inputs.framework }}' ?? '').Trim()
         $runtime = ('${{ inputs.runtime }}' ?? '').Trim()
         $selfContained = ('${{ inputs.self_contained }}' ?? '').Trim().ToLowerInvariant()
 
-        $restoreArgs = ('${{ inputs.restore_args }}' ?? '').Trim()
-        $buildArgs = ('${{ inputs.build_args }}' ?? '').Trim()
-        $testArgs = ('${{ inputs.test_args }}' ?? '').Trim()
-        $publishArgs = ('${{ inputs.publish_args }}' ?? '').Trim()
+        $verbosity = ('${{ inputs.verbosity }}' ?? '').Trim()
+        $nologo = IsTrue '${{ inputs.nologo }}'
+        $disableParallel = IsTrue '${{ inputs.disable_parallel }}'
+        $msbuildTargets = ('${{ inputs.msbuild_targets }}' ?? '').Trim()
+        $msbuildProps = Normalize-MsbuildProperties ('${{ inputs.msbuild_properties }}' ?? '')
+
+        $restoreArgs = Split-Args (('${{ inputs.restore_args }}' ?? '').Trim())
+        $buildArgs = Split-Args (('${{ inputs.build_args }}' ?? '').Trim())
+        $testArgs = Split-Args (('${{ inputs.test_args }}' ?? '').Trim())
+        $publishArgs = Split-Args (('${{ inputs.publish_args }}' ?? '').Trim())
 
         $publishDir = ('${{ inputs.publish_dir }}' ?? '').Trim()
         if ([string]::IsNullOrWhiteSpace($publishDir)) { $publishDir = 'publish' }
@@ -126,54 +273,195 @@ runs:
         $publishTrimmed = IsTrue '${{ inputs.publish_trimmed }}'
         $publishReadyToRun = IsTrue '${{ inputs.publish_ready_to_run }}'
 
-        $ran = $restore -or $build -or $test -or $publish
+        # NuGet
+        $enableNugetRaw = ('${{ inputs.enable_nuget }}' ?? '').Trim()
+        $nugetConfigPath = ('${{ inputs.nuget_config_path }}' ?? '').Trim()
+        $nugetConfigContent = ('${{ inputs.nuget_config_content }}' ?? '')
+        $nugetSourceUrl = ('${{ inputs.nuget_source_url }}' ?? '').Trim()
+        $nugetSourceName = ('${{ inputs.nuget_source_name }}' ?? '').Trim()
+        $nugetUsername = ('${{ inputs.nuget_username }}' ?? '').Trim()
+        $nugetPassword = ('${{ inputs.nuget_password }}' ?? '').Trim()
+        $nugetSourcesRaw = ('${{ inputs.nuget_sources }}' ?? '')
 
-        function Run([string]$title, [string]$command) {
-          Write-Host "::group::$title"
-          Write-Host $command
-          Invoke-Expression $command
-          if ($LASTEXITCODE -ne 0) { throw "$title falhou com exit code $LASTEXITCODE" }
-          Write-Host "::endgroup::"
+        $nugetLockedMode = IsTrue '${{ inputs.nuget_locked_mode }}'
+        $nugetIgnoreFailedSources = IsTrue '${{ inputs.nuget_ignore_failed_sources }}'
+        $nugetInteractive = IsTrue '${{ inputs.nuget_interactive }}'
+        $nugetPackagesDir = ('${{ inputs.nuget_packages_dir }}' ?? '').Trim()
+        $nugetNoCache = IsTrue '${{ inputs.nuget_no_cache }}'
+
+        if (-not (IsSet $nugetSourceName)) { $nugetSourceName = 'private' }
+        if (-not (IsSet $nugetUsername)) { $nugetUsername = 'token' }
+
+        $nugetAuto = (IsSet $nugetConfigPath) -or (IsSet $nugetSourceUrl) -or (IsSet $nugetPassword) -or (IsSet $nugetSourcesRaw) -or (IsSet $nugetConfigContent)
+        $enableNuget = if (-not (IsSet $enableNugetRaw)) { $nugetAuto } else { IsTrue $enableNugetRaw }
+
+        $nugetConfigEffective = $null
+        if (IsSet $nugetConfigContent) {
+          $nugetConfigEffective = Join-Path $env:RUNNER_TEMP "veracode-build-helper-nuget.config"
+          Set-Content -Path $nugetConfigEffective -Value $nugetConfigContent -Encoding UTF8
+        } elseif (IsSet $nugetConfigPath) {
+          if (-not (Test-Path $nugetConfigPath)) { throw "nuget_config_path nao encontrado: $nugetConfigPath" }
+          $nugetConfigEffective = $nugetConfigPath
+        }
+
+        $sources = New-Object System.Collections.Generic.List[hashtable]
+        foreach ($line in (Read-Lines $nugetSourcesRaw)) {
+          $parts = $line.Split('|')
+          if ($parts.Length -lt 2) { throw "Linha invalida em nuget_sources: '$line' (use name|url|username|password)" }
+          $sName = ($parts[0] ?? '').Trim()
+          $sUrl = ($parts[1] ?? '').Trim()
+          $sUser = if ($parts.Length -ge 3) { ($parts[2] ?? '').Trim() } else { '' }
+          $sPass = if ($parts.Length -ge 4) { ($parts[3] ?? '').Trim() } else { '' }
+          if (-not (IsSet $sName)) { throw "nuget_sources: name vazio em '$line'" }
+          if (-not (IsSet $sUrl)) { throw "nuget_sources: url vazia em '$line'" }
+          $sources.Add(@{ name = $sName; url = $sUrl; username = $sUser; password = $sPass })
+        }
+
+        if (IsSet $nugetSourceUrl) {
+          $sources.Add(@{ name = $nugetSourceName; url = $nugetSourceUrl; username = $nugetUsername; password = $nugetPassword })
+        }
+
+        if ($enableNuget) {
+          Run "nuget setup" {
+            if (IsSet $nugetPassword) { Write-Host "::add-mask::$nugetPassword" }
+            foreach ($src in $sources) {
+              if (IsSet $src.password) { Write-Host "::add-mask::$($src.password)" }
+            }
+
+            if ($nugetConfigEffective) { Write-Host "NuGet config efetivo: $nugetConfigEffective" }
+            if ($sources.Count -eq 0 -and -not $nugetConfigEffective) {
+              Write-Host "enable_nuget ativo, mas nenhum source/config foi informado."
+            }
+
+            foreach ($src in $sources) {
+              $args = @('nuget', 'update', 'source', $src.name, '--source', $src.url)
+              if ($nugetConfigEffective) { $args += @('--configfile', $nugetConfigEffective) }
+              if (IsSet $src.username -and IsSet $src.password) {
+                $args += @('--username', $src.username, '--password', $src.password, '--store-password-in-clear-text')
+              } elseif (IsSet $src.password -and -not (IsSet $src.username)) {
+                throw "nuget_sources: password informado sem username para source '$($src.name)'."
+              }
+
+              & dotnet @args 2>$null
+              if ($LASTEXITCODE -ne 0) {
+                $args = @('nuget', 'add', 'source', $src.url, '--name', $src.name)
+                if ($nugetConfigEffective) { $args += @('--configfile', $nugetConfigEffective) }
+                if (IsSet $src.username -and IsSet $src.password) {
+                  $args += @('--username', $src.username, '--password', $src.password, '--store-password-in-clear-text')
+                }
+                & dotnet @args
+                if ($LASTEXITCODE -ne 0) { throw "Falha ao configurar nuget source '$($src.name)'." }
+              }
+              Write-Host "NuGet source ok: $($src.name)"
+            }
+          }
         }
 
         if ($restore) {
-          $cmd = "dotnet restore `"$target`""
-          if ($restoreArgs) { $cmd += " $restoreArgs" }
-          Run "dotnet restore" $cmd
+          Run "dotnet restore" {
+            $args = @('restore', $target)
+            if (IsSet $verbosity) { $args += @('--verbosity', $verbosity) }
+            if ($nologo) { $args += '--nologo' }
+            if ($disableParallel) { $args += '--disable-parallel' }
+            if ($nugetConfigEffective) { $args += @('--configfile', $nugetConfigEffective) }
+            if ($nugetLockedMode) { $args += '--locked-mode' }
+            if ($nugetIgnoreFailedSources) { $args += '--ignore-failed-sources' }
+            if ($nugetInteractive) { $args += '--interactive' }
+            if (IsSet $nugetPackagesDir) { $args += @('--packages', $nugetPackagesDir) }
+            if ($nugetNoCache) { $args += '--no-cache' }
+            $args += $restoreArgs
+            & dotnet @args
+          }
         }
 
         if ($build) {
-          $cmd = "dotnet build `"$target`" -c `"$configuration`""
-          if ($restore) { $cmd += " --no-restore" }
-          if ($framework) { $cmd += " -f `"$framework`"" }
-          if ($buildArgs) { $cmd += " $buildArgs" }
-          Run "dotnet build" $cmd
+          Run "dotnet build" {
+            $args = @('build', $target, '-c', $configuration)
+            if ($restore) { $args += '--no-restore' }
+            if (IsSet $verbosity) { $args += @('--verbosity', $verbosity) }
+            if ($nologo) { $args += '--nologo' }
+            if ($disableParallel) { $args += '--disable-parallel' }
+            if (IsSet $framework) { $args += @('-f', $framework) }
+            if (IsSet $msbuildTargets) { $args += @("-t:$msbuildTargets") }
+            $args += $msbuildProps
+            $args += $buildArgs
+            & dotnet @args
+          }
         }
 
         if ($test) {
-          $cmd = "dotnet test `"$target`" -c `"$configuration`""
-          if ($build) { $cmd += " --no-build" }
-          if ($restore) { $cmd += " --no-restore" }
-          if ($framework) { $cmd += " -f `"$framework`"" }
-          if ($testArgs) { $cmd += " $testArgs" }
-          Run "dotnet test" $cmd
+          Run "dotnet test" {
+            $args = @('test', $target, '-c', $configuration)
+            if ($build) { $args += '--no-build' }
+            if ($restore) { $args += '--no-restore' }
+            if (IsSet $verbosity) { $args += @('--verbosity', $verbosity) }
+            if ($nologo) { $args += '--nologo' }
+            if ($disableParallel) { $args += '--disable-parallel' }
+            if (IsSet $framework) { $args += @('-f', $framework) }
+            if (IsSet $msbuildTargets) { $args += @("-t:$msbuildTargets") }
+            $args += $msbuildProps
+            $args += $testArgs
+            & dotnet @args
+          }
+        }
+
+        $publishMulti = IsTrue '${{ inputs.publish_multi }}'
+        $explicitProjects = Read-Lines ('${{ inputs.projects }}' ?? '')
+
+        function Publish-One([string]$proj, [string]$outDir) {
+          Run "dotnet publish: $proj" {
+            $args = @('publish', $proj, '-c', $configuration, '-o', $outDir)
+            if ($restore) { $args += '--no-restore' }
+            if (IsSet $verbosity) { $args += @('--verbosity', $verbosity) }
+            if ($nologo) { $args += '--nologo' }
+            if (IsSet $framework) { $args += @('-f', $framework) }
+            if (IsSet $runtime) { $args += @('-r', $runtime) }
+            if (IsSet $selfContained) { $args += @('--self-contained', $selfContained) }
+            if (IsSet $msbuildTargets) { $args += @("-t:$msbuildTargets") }
+            if ($publishSingleFile) { $args += '-p:PublishSingleFile=true' }
+            if ($publishTrimmed) { $args += '-p:PublishTrimmed=true' }
+            if ($publishReadyToRun) { $args += '-p:PublishReadyToRun=true' }
+            $args += $msbuildProps
+            $args += $publishArgs
+            & dotnet @args
+          }
         }
 
         if ($publish) {
-          $cmd = "dotnet publish `"$target`" -c `"$configuration`" -o `"$publishDir`""
-          if ($restore) { $cmd += " --no-restore" }
-          if ($framework) { $cmd += " -f `"$framework`"" }
-          if ($runtime) { $cmd += " -r `"$runtime`"" }
-          if ($selfContained) { $cmd += " --self-contained $selfContained" }
-          if ($publishSingleFile) { $cmd += " -p:PublishSingleFile=true" }
-          if ($publishTrimmed) { $cmd += " -p:PublishTrimmed=true" }
-          if ($publishReadyToRun) { $cmd += " -p:PublishReadyToRun=true" }
-          if ($publishArgs) { $cmd += " $publishArgs" }
-          Run "dotnet publish" $cmd
+          if (-not $publishMulti) {
+            Publish-One $target $publishDir
+          } else {
+            $projectsToPublish = New-Object System.Collections.Generic.List[string]
+
+            foreach ($p in $explicitProjects) { $projectsToPublish.Add($p) }
+
+            if ($projectsToPublish.Count -eq 0 -and $target.ToLowerInvariant().EndsWith('.sln')) {
+              Run "dotnet sln list" {
+                $lines = & dotnet sln $target list
+                if ($LASTEXITCODE -ne 0) { throw "Falha ao listar projetos do solution: $target" }
+                foreach ($line in $lines) {
+                  $t = ($line ?? '').Trim()
+                  if ($t -match '\.(csproj|fsproj|vbproj)$') {
+                    $projectsToPublish.Add($t)
+                  }
+                }
+              }
+            }
+
+            if ($projectsToPublish.Count -eq 0) {
+              throw "publish_multi=true, mas nenhum projeto foi resolvido. Use dotnet_projects ou informe um .sln em dotnet_project."
+            }
+
+            foreach ($p in $projectsToPublish) {
+              $name = [System.IO.Path]::GetFileNameWithoutExtension($p)
+              if (-not (IsSet $name)) { throw "Nao foi possivel derivar nome do projeto: $p" }
+              $out = Join-Path $publishDir $name
+              Publish-One $p $out
+            }
+          }
         }
 
         "language_effective=dotnet" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
         "build_ran=$($ran.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
         "publish_dir=$publishDir" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
         "package_paths_default<<__EOF__`n$publishDir/**`n__EOF__" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-
