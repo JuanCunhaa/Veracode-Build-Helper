@@ -210,6 +210,12 @@ inputs:
       **/.github/**
       **/.DS_Store
       **/node_modules/**
+      **/*.test.dll
+      **/*.Tests.dll
+      **/*.spec.dll
+      **/obj/**
+      **/.vs/**
+      **/.vscode/**
   output_zip:
     description: "Nome do zip gerado (somente filename). A saída é fixa em `veracode/<output_zip>`."
     required: false

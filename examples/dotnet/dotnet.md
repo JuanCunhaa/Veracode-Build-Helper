@@ -135,3 +135,165 @@ Notas:
 
 - `zip_path`, `zip_bytes`, `zip_files`
 - `dotnet_publish_dir`
+
+---
+
+## Otimizações para Veracode
+
+Veracode é um serviço de análise estática que escaneia binários compilados. As seguintes práticas garantem melhor análise:
+
+### 1. Incluir Símbolos de Debug (Recomendado)
+
+Símbolos de debug (.pdb) permitem que o Veracode faça análise mais precisa.
+
+**Opção A: Embutir símbolos nos binários** (recomendado para Veracode)
+
+```yaml
+dotnet_msbuild_properties: |
+  DebugType=embedded
+  DebugSymbols=true
+```
+
+Isso embutirá os símbolos dentro dos .dll sem criar arquivos .pdb separados, mantendo o ZIP compacto.
+
+**Opção B: Incluir .pdb separados**
+
+Se preferir arquivos .pdb separados, o `dotnet publish` os incluirá automaticamente. O Veracode os usará durante análise.
+
+```yaml
+# Nenhuma config necessária, publish inclui .pdb por default em Release
+```
+
+### 2. Excluir Test Assemblies
+
+Assemblies de teste (.test.dll, .Tests.dll) aumentam o tamanho do ZIP e podem confundir análise.
+
+```yaml
+exclude_paths: |
+  **/*.test.dll
+  **/*.Tests.dll
+  **/*.spec.dll
+  **/obj/**
+  **/.vs/**
+```
+
+Veja exemplo: `custom-exclusions.yml`
+
+### 3. ⚠️ Cuidado com `PublishTrimmed`
+
+**NÃO recomendado para Veracode**
+
+Se usar `dotnet_publish_trimmed: 'true'`, o Veracode pode não conseguir fazer análise completa porque código será removido durante publish.
+
+```yaml
+dotnet_publish_trimmed: "false"  # ← Manter como padrão
+```
+
+Se você precisa de deployment otimizado, faça dois builds:
+1. Um publish SEM trim para Veracode
+2. Um publish COM trim para deployment
+
+### 4. Versionamento Automático
+
+Injete versão nos metadados dos binários:
+
+```yaml
+dotnet_msbuild_properties: |
+  Version=1.2.3
+  FileVersion=1.2.3
+  InformationalVersion=1.2.3
+```
+
+Veja exemplo: `versioning-package.yml`
+
+### 5. Tamanho Máximo do ZIP
+
+Veracode tem limites de upload:
+- **Free/Sandbox:** ~500 MB
+- **Enterprise:** até 2 GB
+
+Se seu ZIP fica muito grande, verifique:
+- Se há binários temporários em `obj/` ou `bin/`
+- Se há pacotes NuGet desnecessários em `publish/`
+- Se há documentação/assets que podem ser excluídos
+
+### 6. Estrutura Recomendada do Publish
+
+Para Veracode, um publish típico deve ter:
+
+```
+publish/
+├── MyApp.dll           ← Main assembly
+├── MyApp.pdb           ← Símbolos (opcional ou embedded)
+├── Dependency1.dll
+├── Dependency1.pdb
+├── appsettings.json    ← Configurações
+├── web.config          ← Se aplicável (ASP.NET Framework)
+└── runtimes/           ← Runtime-specific binaries (se self-contained)
+```
+
+## Exemplos Avançados
+
+### Build + Testes + Package
+
+```yaml
+dotnet_restore: "true"
+dotnet_build: "true"
+dotnet_test: "true"
+dotnet_publish: "true"
+```
+
+Veja: `test-and-package.yml`
+
+### Self-Contained (Multi-plataforma)
+
+```yaml
+dotnet_runtime: "linux-x64"
+dotnet_self_contained: "true"
+```
+
+Veja: `self-contained-package.yml`
+
+### Framework Específico
+
+```yaml
+dotnet_framework: "net8.0"
+```
+
+Veja: `multi-framework-package.yml`
+
+### Símbolos Otimizados
+
+```yaml
+dotnet_msbuild_properties: |
+  DebugType=embedded
+```
+
+Veja: `symbols-optimized-package.yml`
+
+---
+
+## Próximos Passos
+
+1. **Gere o ZIP** usando esta action
+2. **Verifique o conteúdo** (lista DLLs, tamanho)
+3. **Upload para Veracode** usando [veracode/veracode-uploadandscan-action](https://github.com/veracode/veracode-uploadandscan-action)
+
+### Exemplo: Upload Automático
+
+```yaml
+- uses: ./
+  with:
+    language: dotnet
+    dotnet_version: 8.0.x
+    dotnet_publish: "true"
+    output_zip: app.zip
+
+- uses: veracode/veracode-uploadandscan-action@v2
+  with:
+    appname: MyApp
+    createprofile: false
+    filepath: veracode/app.zip
+    vid: ${{ secrets.VERACODE_API_ID }}
+    vkey: ${{ secrets.VERACODE_API_KEY }}
+```

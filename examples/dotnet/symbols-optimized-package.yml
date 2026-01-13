@@ -1,0 +1,44 @@
+name: build-package-with-embedded-symbols
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./
+        with:
+          language: dotnet
+          dotnet_version: 8.0.x
+          dotnet_project: ""
+          
+          # Embutir símbolos de debug nos binários para melhor análise Veracode
+          # DebugType=embedded = símbolos dentro do .dll (sem arquivo .pdb separado)
+          # Isso melhora a análise do Veracode sem inflacionar o ZIP
+          dotnet_msbuild_properties: |
+            DebugType=embedded
+            DebugSymbols=true
+          
+          dotnet_restore: "true"
+          dotnet_publish: "true"
+          dotnet_configuration: Release
+          dotnet_publish_dir: publish
+          
+          # Excluir potenciais .pdb separados (se houver)
+          exclude_paths: |
+            .git/**
+            .github/**
+            **/.git/**
+            **/.github/**
+            **/.DS_Store
+            **/node_modules/**
+            **/*.test.dll
+            **/*.Tests.dll
+            **/obj/**
+            **/.vs/**
+            **/*.pdb
+          
+          output_zip: app.zip

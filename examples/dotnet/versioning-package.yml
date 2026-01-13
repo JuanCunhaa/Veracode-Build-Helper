@@ -1,0 +1,49 @@
+name: build-package-with-versioning
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Extract version from tag
+        id: version
+        run: |
+          # Extrai versão da tag (ex: v1.2.3 -> 1.2.3)
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Tag: $GITHUB_REF -> Version: $VERSION"
+
+      - uses: ./
+        with:
+          language: dotnet
+          dotnet_version: 8.0.x
+          dotnet_project: ""
+          
+          # Injeta versão via propriedades MSBuild
+          # Isso atualiza o AssemblyVersion e FileVersion nos binários
+          dotnet_msbuild_properties: |
+            Version=${{ steps.version.outputs.version }}
+            FileVersion=${{ steps.version.outputs.version }}
+            InformationalVersion=${{ steps.version.outputs.version }}
+            ContinuousIntegrationBuild=true
+          
+          dotnet_restore: "true"
+          dotnet_publish: "true"
+          dotnet_configuration: Release
+          dotnet_publish_dir: publish
+          
+          # Nome do zip inclui a versão
+          output_zip: "app-v${{ steps.version.outputs.version }}.zip"
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: veracode/app-v${{ steps.version.outputs.version }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

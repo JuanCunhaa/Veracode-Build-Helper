@@ -1,0 +1,43 @@
+name: build-package-custom-exclusions
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./
+        with:
+          language: dotnet
+          dotnet_version: 8.0.x
+          dotnet_project: ""
+          dotnet_restore: "true"
+          dotnet_publish: "true"
+          dotnet_configuration: Release
+          dotnet_publish_dir: publish
+          
+          # Customizar exclusões para Veracode
+          # Exclui: testes, arquivos temporários, cache, documentação
+          exclude_paths: |
+            .git/**
+            .github/**
+            **/.git/**
+            **/.github/**
+            **/.DS_Store
+            **/node_modules/**
+            **/*.test.dll
+            **/*.Tests.dll
+            **/*.spec.dll
+            **/obj/**
+            **/bin/**
+            **/.vs/**
+            **/.vscode/**
+            docs/**
+            tests/**
+            **/*.md
+            **/*.txt
+          
+          output_zip: app.zip

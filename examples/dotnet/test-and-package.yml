@@ -1,0 +1,41 @@
+name: test-and-package (dotnet with tests)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./
+        with:
+          language: dotnet
+          dotnet_version: 8.0.x
+          dotnet_project: ""
+          
+          # Executar testes antes de publicar
+          dotnet_restore: "true"
+          dotnet_build: "true"
+          dotnet_test: "true"
+          
+          # Publish para Veracode
+          dotnet_publish: "true"
+          dotnet_configuration: Release
+          dotnet_publish_dir: publish
+          
+          # Excluir assemblies de teste
+          exclude_paths: |
+            .git/**
+            .github/**
+            **/.git/**
+            **/.github/**
+            **/.DS_Store
+            **/node_modules/**
+            **/*.test.dll
+            **/*.Tests.dll
+            **/obj/**
+            **/.vs/**
+          
+          output_zip: app.zip

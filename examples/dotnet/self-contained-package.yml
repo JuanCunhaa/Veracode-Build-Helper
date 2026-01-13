@@ -1,0 +1,33 @@
+name: self-contained-package (dotnet runtimes)
+
+on:
+  workflow_dispatch:
+    inputs:
+      runtime:
+        description: "Runtime (win-x64, linux-x64, osx-x64)"
+        required: true
+        default: "linux-x64"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./
+        with:
+          language: dotnet
+          dotnet_version: 8.0.x
+          dotnet_project: ""
+          
+          # Self-contained publish para runtime específico
+          dotnet_runtime: ${{ github.event.inputs.runtime }}
+          dotnet_self_contained: "true"
+          
+          dotnet_restore: "true"
+          dotnet_publish: "true"
+          dotnet_configuration: Release
+          dotnet_publish_dir: publish
+          
+          # Nome do zip inclui o runtime
+          output_zip: "app-${{ github.event.inputs.runtime }}.zip"

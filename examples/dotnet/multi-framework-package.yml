@@ -1,0 +1,33 @@
+name: build-package-multi-framework
+
+on:
+  workflow_dispatch:
+    inputs:
+      framework:
+        description: "Target framework (net6.0, net7.0, net8.0)"
+        required: true
+        default: "net8.0"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./
+        with:
+          language: dotnet
+          dotnet_version: 8.0.x
+          dotnet_project: ""
+          
+          # Publica para framework específico
+          # Útil para manter compatibilidade com múltiplas versões do .NET
+          dotnet_framework: ${{ github.event.inputs.framework }}
+          
+          dotnet_restore: "true"
+          dotnet_publish: "true"
+          dotnet_configuration: Release
+          dotnet_publish_dir: publish
+          
+          # Nome do zip inclui o framework
+          output_zip: "app-${{ github.event.inputs.framework }}.zip"

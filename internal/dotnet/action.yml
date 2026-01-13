@@ -5,14 +5,12 @@ inputs:
   working_directory:
     required: false
     default: "."
-
   dotnet_version:
     required: false
     default: ""
   dotnet_version_file:
     required: false
     default: ""
-
   project:
     required: false
     default: ""
@@ -62,7 +60,6 @@ inputs:
   nuget_no_cache:
     required: false
     default: "false"
-
   restore:
     required: false
     default: "true"
@@ -75,7 +72,6 @@ inputs:
   publish:
     required: false
     default: "true"
-
   configuration:
     required: false
     default: "Release"
@@ -88,7 +84,6 @@ inputs:
   self_contained:
     required: false
     default: "false"
-
   verbosity:
     required: false
     default: ""
@@ -104,7 +99,6 @@ inputs:
   msbuild_properties:
     required: false
     default: ""
-
   publish_single_file:
     required: false
     default: "false"
@@ -114,7 +108,6 @@ inputs:
   publish_ready_to_run:
     required: false
     default: "false"
-
   restore_args:
     required: false
     default: ""
@@ -127,11 +120,9 @@ inputs:
   publish_args:
     required: false
     default: ""
-
   publish_dir:
     required: false
     default: "publish"
-
   publish_multi:
     required: false
     default: "false"
